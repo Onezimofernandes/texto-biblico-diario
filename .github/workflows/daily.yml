@@ -23,7 +23,6 @@ jobs:
         env:
           PLAN_CSV: plan.csv
           BIBLE_VERSION: acf
-          ABIBLIA_TOKEN: ${{ secrets.ABIBLIA_TOKEN }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}

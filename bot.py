@@ -193,26 +193,36 @@ def fetch_book(book_id: str) -> dict:
 def chapter_text(book_id: str, chapter: int) -> str:
     data = fetch_book(book_id)
 
+    # À prova de formato: se o JSON vier como LISTA, embrulha em dict
+    if isinstance(data, list):
+        data = {"name": book_id, "chapters": data}
+
     book_name = data.get("name", book_id)
     chapters = data.get("chapters", [])
 
-    # Cada capítulo pode ter number OU chapter como campo de número
-    ch = next(
-        (c for c in chapters if int(c.get("number", c.get("chapter", -1))) == chapter),
-        None
-    )
+    # Cada capítulo pode ter "number" ou "chapter"
+    def ch_num(c):
+        return int(c.get("number", c.get("chapter", -1)))
+
+    ch = next((c for c in chapters if ch_num(c) == chapter), None)
     if not ch:
         raise RuntimeError(f"Capítulo não encontrado: {book_id} {chapter}")
 
-    lines = [f"{book_name} {chapter}"]
-    verses = ch.get("verses", ch.get("verse", ch.get("content", [])))
+    # Versos podem estar em "verses" ou "verse"
+    verses = ch.get("verses", ch.get("verse", []))
 
+    lines = [f"{book_name} {chapter}"]
     for v in verses:
-        # Verso pode ter number OU verse
-        n = v.get("number", v.get("verse"))
-        t = (v.get("text") or v.get("content") or "").strip()
-        if n is not None and t:
-            lines.append(f"{n}. {t}")
+        if isinstance(v, dict):
+            n = v.get("number", v.get("verse"))
+            t = (v.get("text") or v.get("content") or "").strip()
+            if n is not None and t:
+                lines.append(f"{n}. {t}")
+        else:
+            # se vier como string, só adiciona
+            s = str(v).strip()
+            if s:
+                lines.append(s)
 
     return "\n".join(lines)
 

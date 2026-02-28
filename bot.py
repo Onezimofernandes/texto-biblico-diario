@@ -193,38 +193,52 @@ def fetch_book(book_id: str) -> dict:
 def chapter_text(book_id: str, chapter: int) -> str:
     data = fetch_book(book_id)
 
-    # À prova de formato: se o JSON vier como LISTA, embrulha em dict
+    # Formato esperado no repo: data é dict e data["chapters"] é lista de capítulos,
+    # cada capítulo é uma lista de strings (versos).
     if isinstance(data, list):
-        data = {"name": book_id, "chapters": data}
+        # fallback raro: livro veio como lista de capítulos diretamente
+        chapters = data
+        book_name = book_id
+    else:
+        book_name = data.get("name", book_id)
+        chapters = data.get("chapters", [])
 
-    book_name = data.get("name", book_id)
-    chapters = data.get("chapters", [])
+    if not isinstance(chapters, list) or len(chapters) == 0:
+        raise RuntimeError(f"Livro sem capítulos: {book_id}")
 
-    # Cada capítulo pode ter "number" ou "chapter"
-    def ch_num(c):
-        return int(c.get("number", c.get("chapter", -1)))
-
-    ch = next((c for c in chapters if ch_num(c) == chapter), None)
-    if not ch:
+    idx = chapter - 1
+    if idx < 0 or idx >= len(chapters):
         raise RuntimeError(f"Capítulo não encontrado: {book_id} {chapter}")
 
-    # Versos podem estar em "verses" ou "verse"
-    verses = ch.get("verses", ch.get("verse", []))
+    ch_obj = chapters[idx]
 
     lines = [f"{book_name} {chapter}"]
-    for v in verses:
-        if isinstance(v, dict):
-            n = v.get("number", v.get("verse"))
-            t = (v.get("text") or v.get("content") or "").strip()
-            if n is not None and t:
-                lines.append(f"{n}. {t}")
-        else:
-            # se vier como string, só adiciona
-            s = str(v).strip()
-            if s:
-                lines.append(s)
 
-    return "\n".join(lines)
+    # Caso 1 (NVI pt-br): capítulo é LISTA de STRINGS (versos)
+    if isinstance(ch_obj, list) and (len(ch_obj) == 0 or isinstance(ch_obj[0], str)):
+        for i, verse_text in enumerate(ch_obj, start=1):
+            t = str(verse_text).strip()
+            if t:
+                lines.append(f"{i}. {t}")
+        return "\n".join(lines)
+
+    # Caso 2: capítulo pode vir como dict com "verses"
+    if isinstance(ch_obj, dict):
+        verses = ch_obj.get("verses", ch_obj.get("verse", []))
+        for v in verses:
+            if isinstance(v, dict):
+                n = v.get("number", v.get("verse"))
+                t = (v.get("text") or v.get("content") or "").strip()
+                if n is not None and t:
+                    lines.append(f"{n}. {t}")
+            else:
+                t = str(v).strip()
+                if t:
+                    lines.append(t)
+        return "\n".join(lines)
+
+    # Caso 3: qualquer outro formato
+    raise RuntimeError(f"Formato inesperado para capítulo: {book_id} {chapter} ({type(ch_obj)})")
 
 
 def main() -> None:

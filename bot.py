@@ -32,7 +32,10 @@ def smtp_send(subject: str, body: str) -> None:
 
 
 def http_get(url: str) -> dict:
-    headers = {"Accept": "application/json"}
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "texto-biblico-diario/1.0 (+github-actions)"
+    }
     if ABIBLIA_TOKEN:
         headers["Authorization"] = f"Bearer {ABIBLIA_TOKEN}"
     r = requests.get(url, headers=headers, timeout=45)
@@ -50,23 +53,93 @@ def load_today_reading() -> Tuple[str, str]:
     raise RuntimeError(f"Nenhuma leitura encontrada no CSV para a data {today}.")
 
 
+import unicodedata
+
 def normalize_book_key(s: str) -> str:
     s = s.strip()
     s = re.sub(r"^([1-3])\s*([A-Za-zÀ-ÿ])", r"\1 \2", s)  # "2Samuel" -> "2 Samuel"
-    s = re.sub(r"\s+", " ", s)
-    return s.lower()
-
+    s = re.sub(r"\s+", " ", s).lower()
+    # remove acentos
+    s = "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
+    return s
 
 def build_book_map() -> Dict[str, str]:
-    data = http_get(f"{ABIBLIA_BASE}/books")
-    m: Dict[str, str] = {}
-    for b in data:
-        name = (b.get("name") or "").strip()
-        abbrev_pt = (b.get("abbrev", {}).get("pt") or "").strip()
-        if name and abbrev_pt:
-            m[normalize_book_key(name)] = abbrev_pt
-    return m
-
+    # chaves normalizadas (sem acento), valores = abreviação usada na API
+    raw = {
+        "genesis": "gn",
+        "exodo": "ex",
+        "levitico": "lv",
+        "numeros": "nm",
+        "deuteronomio": "dt",
+        "josue": "js",
+        "juizes": "jz",
+        "rute": "rt",
+        "1 samuel": "1sm",
+        "2 samuel": "2sm",
+        "1 reis": "1rs",
+        "2 reis": "2rs",
+        "1 cronicas": "1cr",
+        "2 cronicas": "2cr",
+        "esdras": "ed",
+        "neemias": "ne",
+        "ester": "et",
+        "jo": "job",        # no seu plano aparece "Jó"
+        "job": "job",
+        "salmo": "sl",
+        "salmos": "sl",
+        "proverbios": "pv",
+        "eclesiastes": "ec",
+        "cantares": "ct",
+        "isaias": "is",
+        "jeremias": "jr",
+        "lamentacoes": "lm",
+        "ezequiel": "ez",
+        "daniel": "dn",
+        "oseias": "os",
+        "joel": "jl",
+        "amos": "am",
+        "obadias": "ob",
+        "jonas": "jn",
+        "miqueias": "mq",
+        "naum": "na",
+        "habacuque": "hc",
+        "sofonias": "sf",
+        "ageu": "ag",
+        "zacarias": "zc",
+        "malaquias": "ml",
+        "mateus": "mt",
+        "marcos": "mc",
+        "lucas": "lc",
+        "joao": "jo",
+        "atos": "at",
+        "romanos": "rm",
+        "1 corintios": "1co",
+        "2 corintios": "2co",
+        "galatas": "gl",
+        "efesios": "ef",
+        "filipenses": "fp",
+        "colossenses": "cl",
+        "1 tessalonicenses": "1ts",
+        "2 tessalonicenses": "2ts",
+        "1 timoteo": "1tm",
+        "2 timoteo": "2tm",
+        "tito": "tt",
+        "filemom": "fm",
+        "hebreus": "hb",
+        "tiago": "tg",
+        "1 pedro": "1pe",
+        "2 pedro": "2pe",
+        "1 joao": "1jo",
+        "2 joao": "2jo",
+        "3 joao": "3jo",
+        "judas": "jd",
+        "apocalipse": "ap",
+    }
+    # normaliza as chaves
+    return {normalize_book_key(k): v for k, v in raw.items()}
 
 def expand_chapter_spec(spec: str) -> List[int]:
     spec = spec.strip().replace(" ", "")

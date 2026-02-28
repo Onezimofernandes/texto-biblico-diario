@@ -256,9 +256,59 @@ def main() -> None:
             for ch in chapters:
                 blocks.append(chapter_text(book_id, ch))
 
-        body = f"Data: {date_str}\nLeitura: {reading}\nVersão: {BIBLE_VERSION}\n\n" + "\n\n".join(blocks)
-        subject = f"Leitura Bíblica ({date_str}) — {reading}"
-        smtp_send(subject, body)
+       body_text = f"Leitura Bíblica do Dia\nData: {date_str}\nLeitura: {reading}\nVersão: {BIBLE_VERSION}\n\n" + "\n\n".join(blocks)
+
+# HTML devocional: tipografia, espaçamento e “cartões”
+blocks_html = "".join(
+    f"""
+    <div style="margin-top:18px; padding:16px 16px; background:#ffffff; border:1px solid #e9edf5; border-radius:14px;">
+      <div style="white-space:pre-wrap; font-family: Georgia, 'Times New Roman', serif; font-size:16px; line-height:1.75; color:#111827;">
+        {b}
+      </div>
+    </div>
+    """
+    for b in blocks
+)
+
+body_html = f"""
+<!doctype html>
+<html>
+  <body style="margin:0; padding:0; background:#f6f7fb;">
+    <div style="max-width:760px; margin:0 auto; padding:26px;">
+      <div style="text-align:center; margin-bottom:14px; font-family: Georgia, 'Times New Roman', serif;">
+        <div style="font-size:22px; font-weight:700; color:#111827;">Leitura Bíblica do Dia</div>
+        <div style="margin-top:6px; font-size:14px; color:#6b7280;">
+          {date_str} • Versão: <b style="color:#111827;">{BIBLE_VERSION.upper()}</b>
+        </div>
+      </div>
+
+      <div style="background:#ffffff; border:1px solid #e9edf5; border-radius:16px; padding:18px;">
+        <div style="font-family: Arial, sans-serif; font-size:12px; color:#6b7280; letter-spacing:.06em; text-transform:uppercase;">
+          Leitura de hoje
+        </div>
+        <div style="margin-top:6px; font-family: Georgia, 'Times New Roman', serif; font-size:20px; font-weight:700; color:#111827;">
+          {reading}
+        </div>
+
+        <div style="margin-top:12px; height:1px; background:#eef2f7;"></div>
+
+        <div style="margin-top:14px; font-family: Arial, sans-serif; font-size:13px; color:#6b7280;">
+          Reserve alguns minutos, leia com calma e, se quiser, finalize com uma breve oração.
+        </div>
+      </div>
+
+      {blocks_html}
+
+      <div style="margin-top:18px; text-align:center; font-family: Arial, sans-serif; font-size:12px; color:#9ca3af;">
+        Enviado automaticamente às 06:00 (Fortaleza).
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
+subject = f"Leitura Bíblica ({date_str}) — {reading}"
+smtp_send(subject, body_text, body_html)
 
     except Exception as e:
         smtp_send("ERRO — Leitura Bíblica diária", f"Falha ao gerar/enviar leitura.\n\nDetalhes:\n{e}")

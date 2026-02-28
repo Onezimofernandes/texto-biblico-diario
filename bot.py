@@ -3,16 +3,17 @@ import datetime as dt
 import os
 import re
 import smtplib
+import unicodedata
 from email.message import EmailMessage
 from typing import Dict, List, Tuple
 
 import requests
 
 PLAN_CSV = os.environ.get("PLAN_CSV", "plan.csv")
-BIBLE_VERSION = os.environ.get("BIBLE_VERSION", "acf")  # ex: acf, ra, nvi (se disponível na API)
-ABIBLIA_TOKEN = os.environ.get("ABIBLIA_TOKEN", "").strip()
+BIBLE_LANG = os.environ.get("BIBLE_LANG", "pt-br")
+BIBLE_VERSION = os.environ.get("BIBLE_VERSION", "acf")  # acf, nvi, arc, aa, kja etc. :contentReference[oaicite:1]{index=1}
 
-ABIBLIA_BASE = "https://www.abibliadigital.com.br/api"
+RAW_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions"
 
 
 def smtp_send(subject: str, body: str) -> None:
@@ -31,18 +32,6 @@ def smtp_send(subject: str, body: str) -> None:
         smtp.send_message(msg)
 
 
-def http_get(url: str) -> dict:
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "texto-biblico-diario/1.0 (+github-actions)"
-    }
-    if ABIBLIA_TOKEN:
-        headers["Authorization"] = f"Bearer {ABIBLIA_TOKEN}"
-    r = requests.get(url, headers=headers, timeout=45)
-    r.raise_for_status()
-    return r.json()
-
-
 def load_today_reading() -> Tuple[str, str]:
     today = dt.date.today().isoformat()
     with open(PLAN_CSV, encoding="utf-8") as f:
@@ -53,21 +42,16 @@ def load_today_reading() -> Tuple[str, str]:
     raise RuntimeError(f"Nenhuma leitura encontrada no CSV para a data {today}.")
 
 
-import unicodedata
-
-def normalize_book_key(s: str) -> str:
+def norm(s: str) -> str:
     s = s.strip()
     s = re.sub(r"^([1-3])\s*([A-Za-zÀ-ÿ])", r"\1 \2", s)  # "2Samuel" -> "2 Samuel"
     s = re.sub(r"\s+", " ", s).lower()
-    # remove acentos
-    s = "".join(
-        c for c in unicodedata.normalize("NFD", s)
-        if unicodedata.category(c) != "Mn"
-    )
+    s = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
     return s
 
-def build_book_map() -> Dict[str, str]:
-    # chaves normalizadas (sem acento), valores = abreviação usada na API
+
+def book_name_to_id_map() -> Dict[str, str]:
+    # IDs conforme README do repositório MaatheusGois/bible :contentReference[oaicite:2]{index=2}
     raw = {
         "genesis": "gn",
         "exodo": "ex",
@@ -75,130 +59,137 @@ def build_book_map() -> Dict[str, str]:
         "numeros": "nm",
         "deuteronomio": "dt",
         "josue": "js",
-        "juizes": "jz",
+        "juizes": "jud",
         "rute": "rt",
         "1 samuel": "1sm",
         "2 samuel": "2sm",
-        "1 reis": "1rs",
-        "2 reis": "2rs",
-        "1 cronicas": "1cr",
-        "2 cronicas": "2cr",
-        "esdras": "ed",
+        "1 reis": "1kgs",
+        "2 reis": "2kgs",
+        "1 cronicas": "1ch",
+        "2 cronicas": "2ch",
+        "esdras": "ezr",
         "neemias": "ne",
         "ester": "et",
-        "jo": "job",        # no seu plano aparece "Jó"
+        "jo": "job",
         "job": "job",
-        "salmo": "sl",
-        "salmos": "sl",
-        "proverbios": "pv",
+        "salmo": "ps",
+        "salmos": "ps",
+        "proverbios": "prv",
         "eclesiastes": "ec",
-        "cantares": "ct",
+        "cantares": "so",
         "isaias": "is",
         "jeremias": "jr",
         "lamentacoes": "lm",
         "ezequiel": "ez",
         "daniel": "dn",
-        "oseias": "os",
+        "oseias": "ho",
         "joel": "jl",
         "amos": "am",
         "obadias": "ob",
         "jonas": "jn",
-        "miqueias": "mq",
+        "miqueias": "mi",
         "naum": "na",
-        "habacuque": "hc",
-        "sofonias": "sf",
-        "ageu": "ag",
+        "habacuque": "hk",
+        "sofonias": "zp",
+        "ageu": "hg",
         "zacarias": "zc",
         "malaquias": "ml",
         "mateus": "mt",
-        "marcos": "mc",
-        "lucas": "lc",
+        "marcos": "mk",
+        "lucas": "lk",
         "joao": "jo",
-        "atos": "at",
+        "atos": "act",
         "romanos": "rm",
         "1 corintios": "1co",
         "2 corintios": "2co",
         "galatas": "gl",
-        "efesios": "ef",
-        "filipenses": "fp",
+        "efesios": "eph",
+        "filipenses": "ph",
         "colossenses": "cl",
         "1 tessalonicenses": "1ts",
         "2 tessalonicenses": "2ts",
         "1 timoteo": "1tm",
         "2 timoteo": "2tm",
         "tito": "tt",
-        "filemom": "fm",
+        "filemom": "phm",
         "hebreus": "hb",
-        "tiago": "tg",
+        "tiago": "jm",
         "1 pedro": "1pe",
         "2 pedro": "2pe",
         "1 joao": "1jo",
         "2 joao": "2jo",
         "3 joao": "3jo",
         "judas": "jd",
-        "apocalipse": "ap",
+        "apocalipse": "re",
     }
-    # normaliza as chaves
-    return {normalize_book_key(k): v for k, v in raw.items()}
+    return {norm(k): v for k, v in raw.items()}
+
 
 def expand_chapter_spec(spec: str) -> List[int]:
     spec = spec.strip().replace(" ", "")
     chunks = [c for c in spec.split(",") if c]
-    chapters: List[int] = []
+    out: List[int] = []
     for c in chunks:
         if "-" in c:
             a, b = c.split("-", 1)
-            a_i, b_i = int(a), int(b)
-            if b_i < a_i:
-                raise RuntimeError(f"Range inválido: {c}")
-            chapters.extend(list(range(a_i, b_i + 1)))
+            out.extend(range(int(a), int(b) + 1))
         else:
-            chapters.append(int(c))
-
-    # remove duplicados preservando ordem
-    seen = set()
-    uniq = []
-    for x in chapters:
+            out.append(int(c))
+    # unique preserving order
+    seen, uniq = set(), []
+    for x in out:
         if x not in seen:
             uniq.append(x)
             seen.add(x)
     return uniq
 
 
-def parse_reading(reading: str, book_map: Dict[str, str]) -> List[Tuple[str, List[int]]]:
-    if not reading:
-        return []
-
+def parse_reading(reading: str, name_to_id: Dict[str, str]) -> List[Tuple[str, List[int]]]:
     parts = [p.strip() for p in reading.split(";") if p.strip()]
-    out: List[Tuple[str, List[int]]] = []
-
+    plan: List[Tuple[str, List[int]]] = []
     for part in parts:
         m = re.match(r"^(.+?)\s+([\d,\-\s]+)$", part)
         if not m:
             raise RuntimeError(f"Não consegui interpretar este trecho: '{part}'")
-
         book_raw, ch_raw = m.group(1), m.group(2)
-        book_key = normalize_book_key(book_raw)
-
-        if book_key not in book_map:
-            raise RuntimeError(
-                f"Livro não reconhecido: '{book_raw}' (normalizado: '{book_key}'). "
-                f"Isso geralmente significa diferença de grafia/acentuação."
-            )
-
-        abbrev = book_map[book_key]
+        key = norm(book_raw)
+        if key not in name_to_id:
+            raise RuntimeError(f"Livro não reconhecido: '{book_raw}' (normalizado: '{key}')")
+        book_id = name_to_id[key]
         chapters = expand_chapter_spec(ch_raw)
-        out.append((abbrev, chapters))
+        plan.append((book_id, chapters))
+    return plan
 
-    return out
+
+_book_cache: Dict[str, dict] = {}
 
 
-def fetch_chapter_text(version: str, abbrev: str, chapter: int) -> str:
-    payload = http_get(f"{ABIBLIA_BASE}/verses/{version}/{abbrev}/{chapter}")
-    book = payload.get("book", {}).get("name", abbrev)
-    verses = payload.get("verses", [])
-    lines = [f"{book} {chapter}"]
-    for v in verses:
+def fetch_book(book_id: str) -> dict:
+    # Baixa o livro inteiro 1x por execução (bem menos requests) :contentReference[oaicite:3]{index=3}
+    cache_key = f"{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}"
+    if cache_key in _book_cache:
+        return _book_cache[cache_key]
+
+    url = f"{RAW_BASE}/{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}/{book_id}.json"
+    r = requests.get(url, timeout=60, headers={"User-Agent": "texto-biblico-diario/1.0"})
+    r.raise_for_status()
+    data = r.json()
+    _book_cache[cache_key] = data
+    return data
+
+
+def chapter_text(book_id: str, chapter: int) -> str:
+    data = fetch_book(book_id)
+    book_name = data.get("name", book_id)
+    chapters = data.get("chapters", [])
+
+    # chapters é lista; cada item tem "number" e "verses"
+    ch = next((c for c in chapters if int(c.get("number")) == chapter), None)
+    if not ch:
+        raise RuntimeError(f"Capítulo não encontrado: {book_id} {chapter}")
+
+    lines = [f"{book_name} {chapter}"]
+    for v in ch.get("verses", []):
         n = v.get("number")
         t = (v.get("text") or "").strip()
         if n is not None and t:
@@ -209,28 +200,19 @@ def fetch_chapter_text(version: str, abbrev: str, chapter: int) -> str:
 def main() -> None:
     try:
         date_str, reading = load_today_reading()
-        book_map = build_book_map()
-        plan = parse_reading(reading, book_map)
-
-        if not plan:
-            raise RuntimeError("Leitura do dia vazia.")
+        name_to_id = book_name_to_id_map()
+        plan = parse_reading(reading, name_to_id)
 
         blocks = []
-        for abbrev, chapters in plan:
+        for book_id, chapters in plan:
             for ch in chapters:
-                blocks.append(fetch_chapter_text(BIBLE_VERSION, abbrev, ch))
+                blocks.append(chapter_text(book_id, ch))
 
-        body = (
-            f"Data: {date_str}\n"
-            f"Leitura: {reading}\n"
-            f"Versão: {BIBLE_VERSION}\n\n"
-            + "\n\n".join(blocks)
-        )
+        body = f"Data: {date_str}\nLeitura: {reading}\nVersão: {BIBLE_VERSION}\n\n" + "\n\n".join(blocks)
         subject = f"Leitura Bíblica ({date_str}) — {reading}"
         smtp_send(subject, body)
 
     except Exception as e:
-        # Se algo falhar, você recebe um e-mail de erro (facilita depurar)
         smtp_send("ERRO — Leitura Bíblica diária", f"Falha ao gerar/enviar leitura.\n\nDetalhes:\n{e}")
 
 

@@ -165,10 +165,22 @@ _book_cache: Dict[str, dict] = {}
 
 
 def fetch_book(book_id: str) -> dict:
-    # Baixa o livro inteiro 1x por execução (bem menos requests) :contentReference[oaicite:3]{index=3}
+    # Baixa o livro inteiro 1x por execução
     cache_key = f"{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}"
     if cache_key in _book_cache:
         return _book_cache[cache_key]
+
+    url = f"{RAW_BASE}/{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}/{book_id}.json"
+    r = requests.get(url, timeout=60, headers={"User-Agent": "texto-biblico-diario/1.0"})
+    r.raise_for_status()
+    data = r.json()
+
+    # Alguns arquivos vêm como LISTA direto (em vez de dict com name/chapters)
+    if isinstance(data, list):
+        data = {"name": book_id, "chapters": data}
+
+    _book_cache[cache_key] = data
+    return data
 
     url = f"{RAW_BASE}/{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}/{book_id}.json"
     r = requests.get(url, timeout=60, headers={"User-Agent": "texto-biblico-diario/1.0"})
@@ -180,20 +192,28 @@ def fetch_book(book_id: str) -> dict:
 
 def chapter_text(book_id: str, chapter: int) -> str:
     data = fetch_book(book_id)
+
     book_name = data.get("name", book_id)
     chapters = data.get("chapters", [])
 
-    # chapters é lista; cada item tem "number" e "verses"
-    ch = next((c for c in chapters if int(c.get("number")) == chapter), None)
+    # Cada capítulo pode ter number OU chapter como campo de número
+    ch = next(
+        (c for c in chapters if int(c.get("number", c.get("chapter", -1))) == chapter),
+        None
+    )
     if not ch:
         raise RuntimeError(f"Capítulo não encontrado: {book_id} {chapter}")
 
     lines = [f"{book_name} {chapter}"]
-    for v in ch.get("verses", []):
-        n = v.get("number")
-        t = (v.get("text") or "").strip()
+    verses = ch.get("verses", ch.get("verse", ch.get("content", [])))
+
+    for v in verses:
+        # Verso pode ter number OU verse
+        n = v.get("number", v.get("verse"))
+        t = (v.get("text") or v.get("content") or "").strip()
         if n is not None and t:
             lines.append(f"{n}. {t}")
+
     return "\n".join(lines)
 
 

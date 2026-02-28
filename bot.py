@@ -16,7 +16,7 @@ BIBLE_VERSION = os.environ.get("BIBLE_VERSION", "acf")  # acf, nvi, arc, aa, kja
 RAW_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions"
 
 
-def smtp_send(subject: str, body: str) -> None:
+def smtp_send(subject: str, body_text: str, body_html: str) -> None:
     email_user = os.environ["EMAIL_USER"]
     email_pass = os.environ["EMAIL_PASS"]
     email_to = os.environ["EMAIL_TO"]
@@ -25,12 +25,16 @@ def smtp_send(subject: str, body: str) -> None:
     msg["Subject"] = subject
     msg["From"] = email_user
     msg["To"] = email_to
-    msg.set_content(body)
+
+    # fallback texto puro
+    msg.set_content(body_text)
+
+    # versão HTML (visual)
+    msg.add_alternative(body_html, subtype="html")
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(email_user, email_pass)
         smtp.send_message(msg)
-
 
 def load_today_reading() -> Tuple[str, str]:
     today = dt.date.today().isoformat()

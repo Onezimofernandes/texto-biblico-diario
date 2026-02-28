@@ -22,7 +22,7 @@ jobs:
       - name: Rodar bot
         env:
           PLAN_CSV: plan.csv
-          BIBLE_VERSION: acf
+          BIBLE_VERSION: nvi
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}

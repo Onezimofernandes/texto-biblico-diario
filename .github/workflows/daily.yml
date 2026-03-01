@@ -2,9 +2,9 @@ name: Leitura Biblica Diaria
 
 on:
   schedule:
-    - cron: "0 9 * * *"
-    - cron: "5 9 * * *"
-    - cron: "10 9 * * *"
+    - cron: "0 9 * * *"   # 06:00 Fortaleza
+    - cron: "10 9 * * *"  # 06:10 Fortaleza (retry)
+    - cron: "20 9 * * *"  # 06:20 Fortaleza (retry)
   workflow_dispatch:
 
 jobs:
@@ -21,12 +21,29 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      # Tenta baixar o "sent.txt" do último run (se existir).
+      # Se não existir, não falha.
+      - name: Baixar marcador de envio (se existir)
+        uses: actions/download-artifact@v4
+        with:
+          name: sent-marker
+          path: .
+        continue-on-error: true
+
       - name: Rodar bot
         env:
           PLAN_CSV: plan.csv
+          BIBLE_LANG: pt-br
           BIBLE_VERSION: nvi
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python bot.py
 
+      # Sobe o "sent.txt" atualizado para o próximo run poder checar.
+      - name: Salvar marcador de envio
+        uses: actions/upload-artifact@v4
+        with:
+          name: sent-marker
+          path: sent.txt
+          if-no-files-found: ignore

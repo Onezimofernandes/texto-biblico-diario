@@ -21,29 +21,27 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      # Tenta baixar o "sent.txt" do último run (se existir).
-      # Se não existir, não falha.
-      - name: Baixar marcador de envio (se existir)
-        uses: actions/download-artifact@v4
+      # Cache para persistir o sent.txt entre runs
+      - name: Restaurar marcador (cache)
+        uses: actions/cache@v4
         with:
-          name: sent-marker
-          path: .
-        continue-on-error: true
+          path: sent.txt
+          key: sent-marker-v1
 
       - name: Rodar bot
         env:
           PLAN_CSV: plan.csv
           BIBLE_LANG: pt-br
           BIBLE_VERSION: nvi
+          SENT_MARKER_FILE: sent.txt
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python bot.py
 
-      # Sobe o "sent.txt" atualizado para o próximo run poder checar.
-      - name: Salvar marcador de envio
-        uses: actions/upload-artifact@v4
+      # Atualiza o cache (mesma key fixa) com o sent.txt novo
+      - name: Salvar marcador (cache)
+        uses: actions/cache@v4
         with:
-          name: sent-marker
           path: sent.txt
-          if-no-files-found: ignore
+          key: sent-marker-v1

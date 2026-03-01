@@ -2,9 +2,7 @@ name: Leitura Biblica Diaria
 
 on:
   schedule:
-    - cron: "0 9 * * *"
-    - cron: "5 9 * * *"   # 06:05 Fortaleza
-    - cron: "10 9 * * *"  # 06:10 Fortaleza
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:

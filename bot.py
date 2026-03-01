@@ -12,6 +12,7 @@ import requests
 PLAN_CSV = os.environ.get("PLAN_CSV", "plan.csv")
 BIBLE_LANG = os.environ.get("BIBLE_LANG", "pt-br")
 BIBLE_VERSION = os.environ.get("BIBLE_VERSION", "acf")  # acf, nvi, arc, aa, kja etc. :contentReference[oaicite:1]{index=1}
+SENT_MARKER_FILE = os.environ.get("SENT_MARKER_FILE", "sent.txt")
 
 RAW_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions"
 
@@ -243,18 +244,38 @@ def chapter_text(book_id: str, chapter: int) -> str:
 
     # Caso 3: qualquer outro formato
     raise RuntimeError(f"Formato inesperado para capítulo: {book_id} {chapter} ({type(ch_obj)})")
+    
+def already_sent_today(date_str: str) -> bool:
+    try:
+        with open(SENT_MARKER_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip() == date_str
+    except FileNotFoundError:
+        return False
+
+def mark_sent(date_str: str) -> None:
+    with open(SENT_MARKER_FILE, "w", encoding="utf-8") as f:
+        f.write(date_str)
 
 def main() -> None:
     try:
+        # 1) Lê a referência do dia
         date_str, reading = load_today_reading()
+
+        # 2) Idempotência: se já enviou hoje, não envia de novo
+        if already_sent_today(date_str):
+            return
+
+        # 3) Monta o plano (lista de livros/capítulos)
         name_to_id = book_name_to_id_map()
         plan = parse_reading(reading, name_to_id)
 
+        # 4) Busca texto bíblico (capítulos)
         blocks = []
         for book_id, chapters in plan:
             for ch in chapters:
                 blocks.append(chapter_text(book_id, ch))
 
+        # 5) Corpo texto simples (fallback)
         body_text = (
             f"Leitura Bíblica do Dia\n"
             f"Data: {date_str}\n"
@@ -263,6 +284,7 @@ def main() -> None:
             + "\n\n".join(blocks)
         )
 
+        # 6) Corpo HTML devocional
         blocks_html = "".join(
             f"""
             <div style="margin-top:18px; padding:16px 16px; background:#ffffff; border:1px solid #e9edf5; border-radius:14px;">
@@ -311,12 +333,21 @@ def main() -> None:
         </html>
         """
 
+        # 7) Envia e marca como enviado
         subject = f"Leitura Bíblica ({date_str}) — {reading}"
         smtp_send(subject, body_text, body_html)
+        mark_sent(date_str)
 
     except Exception:
         import traceback
-        smtp_send("ERRO — Leitura Bíblica diária", traceback.format_exc(), f"<pre>{traceback.format_exc()}</pre>")
-
-if __name__ == "__main__":
-    main()
+        tb = traceback.format_exc()
+        # tenta te avisar por e-mail com o stack trace
+        try:
+            smtp_send(
+                "ERRO — Leitura Bíblica diária",
+                tb,
+                f"<pre style='white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;'>{tb}</pre>",
+            )
+        except Exception:
+            # se até o envio falhar, não há muito o que fazer
+            pass

@@ -2,7 +2,7 @@ name: Leitura Biblica Diaria
 
 on:
   schedule:
-    - cron: "0 9 * * *"   # 06:00 Fortaleza
+    - cron: "0 9 * * *"   # 06:00 Fortaleza (UTC-3)
     - cron: "10 9 * * *"  # 06:10 Fortaleza (retry)
     - cron: "20 9 * * *"  # 06:20 Fortaleza (retry)
   workflow_dispatch:
@@ -21,27 +21,27 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      # Cache para persistir o sent.txt entre runs
+      # Persistência REAL entre runs: cache do sent.txt
       - name: Restaurar marcador (cache)
         uses: actions/cache@v4
         with:
           path: sent.txt
-          key: sent-marker-v1
+          key: sent-marker
+          restore-keys: sent-marker
 
       - name: Rodar bot
         env:
           PLAN_CSV: plan.csv
           BIBLE_LANG: pt-br
           BIBLE_VERSION: nvi
-          SENT_MARKER_FILE: sent.txt
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python bot.py
 
-      # Atualiza o cache (mesma key fixa) com o sent.txt novo
+      # Atualiza o cache (salva o sent.txt que o bot gerou/atualizou)
       - name: Salvar marcador (cache)
         uses: actions/cache@v4
         with:
           path: sent.txt
-          key: sent-marker-v1
+          key: sent-marker

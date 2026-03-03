@@ -3,9 +3,8 @@ name: Leitura Biblica Diaria
 on:
   schedule:
     - cron: "0 6 * * *"   # 06:00 Fortaleza (UTC-3)
-    - cron: "10 6 * * *"  # 06:10 Fortaleza (retry)
-    - cron: "20 6 * * *"  # 06:20 Fortaleza (retry)
-  workflow_dispatch:
+   
+     workflow_dispatch:
 
 jobs:
   run:

@@ -2,7 +2,7 @@ name: Leitura Biblica Diaria
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # 06:00 Fortaleza (UTC-3)
+    - cron: "0 3  * * *"   # 06:00 Fortaleza (UTC-3)
    
      workflow_dispatch:
 

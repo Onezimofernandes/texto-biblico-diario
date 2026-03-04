@@ -1,48 +1,46 @@
 name: Leitura Biblica Diaria
 
 on:
-schedule:
+  schedule:
     - cron: "0 9 * * *"   # 06:00 Fortaleza (UTC-3)
     - cron: "10 9 * * *"  # 06:10 Fortaleza (retry)
     - cron: "20 9 * * *"  # 06:20 Fortaleza (retry)
-    
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-run:
-runs-on: ubuntu-latest
+  run:
+    runs-on: ubuntu-latest
 
-steps:
-- uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-- uses: actions/setup-python@v5
-with:
-python-version: "3.11"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-- name: Instalar dependencias
-run: pip install -r requirements.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
 
-# Persistência REAL entre runs: cache do sent.txt
-- name: Restaurar marcador (cache)
-uses: actions/cache@v4
-with:
-path: sent.txt
-key: sent-marker
-restore-keys: sent-marker
+      - name: Restaurar marcador (cache)
+        uses: actions/cache@v4
+        with:
+          path: sent.txt
+          key: sent-marker
+          restore-keys: |
+            sent-marker
 
-- name: Rodar bot
-env:
-PLAN_CSV: plan.csv
-BIBLE_LANG: pt-br
-BIBLE_VERSION: nvi
-EMAIL_USER: ${{ secrets.EMAIL_USER }}
-EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-EMAIL_TO: ${{ secrets.EMAIL_TO }}
-run: python bot.py
+      - name: Rodar bot
+        env:
+          PLAN_CSV: plan.csv
+          BIBLE_LANG: pt-br
+          BIBLE_VERSION: nvi
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python bot.py
 
-# Atualiza o cache (salva o sent.txt que o bot gerou/atualizou)
-- name: Salvar marcador (cache)
-uses: actions/cache@v4
-with:
-path: sent.txt
-key: sent-marker
+      - name: Salvar marcador (cache)
+        uses: actions/cache@v4
+        with:
+          path: sent.txt
+          key: sent-marker

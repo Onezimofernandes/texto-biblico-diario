@@ -317,14 +317,14 @@ def main() -> None:
                 <div style="margin-top:12px; height:1px; background:#eef2f7;"></div>
 
                 <div style="margin-top:14px; font-family: Arial, sans-serif; font-size:13px; color:#6b7280;">
-                  Reserve alguns minutos, leia com calma e, se quiser, finalize com uma breve oração.
+                  Bom dia. Aqui está a sua porção bíblica de hoje. Leia com calma, tentando sempre aplicar à sua vida..
                 </div>
               </div>
 
               {blocks_html}
 
               <div style="margin-top:18px; text-align:center; font-family: Arial, sans-serif; font-size:12px; color:#9ca3af;">
-                Enviado automaticamente às 06:00 (Fortaleza).
+                Tenha um bom dia. Que Deus o abençoe maravilhosamente hoje e sempre.
               </div>
             </div>
           </body>

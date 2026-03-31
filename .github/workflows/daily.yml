@@ -32,7 +32,7 @@ jobs:
         env:
           PLAN_CSV: plan.csv
           BIBLE_LANG: pt-br
-          BIBLE_VERSION: nvi
+          BIBLE_VERSION: aa
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}

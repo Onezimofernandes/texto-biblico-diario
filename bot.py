@@ -258,6 +258,38 @@ def chapter_text(book_id: str, chapter: int) -> str:
     # Qualquer outro formato
     raise RuntimeError(f"Formato inesperado para capítulo: {book_id} {chapter} ({type(ch_obj)})")
 
+def sanitize_text(text: str) -> str:
+    """
+    Corrige artefatos conhecidos e normaliza o texto bíblico
+    sem alterar o conteúdo legítimo.
+    """
+
+    # Correções específicas conhecidas
+    replacements = {
+        "full-versionmente": "completamente",
+        "full-version": "",
+    }
+
+    for wrong, correct in replacements.items():
+        text = text.replace(wrong, correct)
+
+    # Remove espaços duplicados
+    text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove quebras excessivas
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Remove espaços antes de pontuação
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+
+    # Corrige possíveis espaços após abertura de parênteses
+    text = re.sub(r"\(\s+", "(", text)
+
+    # Corrige espaços antes de fechamento de parênteses
+    text = re.sub(r"\s+\)", ")", text)
+
+    return text.strip()
+
 
 def main() -> None:
     try:
@@ -273,7 +305,9 @@ def main() -> None:
         blocks: List[str] = []
         for book_id, chapters in plan:
             for ch in chapters:
-                blocks.append(chapter_text(book_id, ch))
+                raw_text = chapter_text(book_id, ch)
+                clean_text = sanitize_text(raw_text)
+                blocks.append(clean_text)
 
         body_text = (
             f"Leitura Bíblica do Dia\n"

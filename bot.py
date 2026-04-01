@@ -78,6 +78,7 @@ def book_name_to_id_map() -> Dict[str, str]:
 # PARSER (capítulo + versículo)
 # =========================
 def parse_reading(reading: str, name_to_id: Dict[str, str]):
+    reading = reading.replace(",", ";")
     parts = [p.strip() for p in reading.split(";") if p.strip()]
     plan = []
 

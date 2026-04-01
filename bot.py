@@ -381,7 +381,7 @@ def main():
                         line-height: 1.8;">
                 
                 <h2 style="color: #1a2a3a; 
-                           font-size: 28px; 
+                           font-size: 22px; 
                            margin-bottom: 8px; 
                            font-weight: 700;
                            letter-spacing: -0.5px;">
@@ -389,7 +389,7 @@ def main():
                 </h2>
                 
                 <p style="color: #7f8c8d; 
-                          font-size: 16px; 
+                          font-size: 14px; 
                           margin-top: 0; 
                           margin-bottom: 24px;
                           text-transform: uppercase;
@@ -420,7 +420,7 @@ def main():
                                text-align: center; 
                                font-size: 12px; 
                                color: #bdc3c7;">
-                    Gerado automaticamente para sua meditação diária.
+                    Faça a sua leitura com atenção, sempre procurando uma aplicação prática para a sua vida.
                 </footer>
             </div>
         </body>

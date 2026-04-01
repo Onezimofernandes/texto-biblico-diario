@@ -340,7 +340,7 @@ def main() -> None:
                             selected.append(line)
 
             text = "\n".join([header] + selected)
-    else:
+        else:
             text = full_text
 
     text = sanitize_text(text)

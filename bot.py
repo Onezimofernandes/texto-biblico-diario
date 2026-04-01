@@ -325,7 +325,7 @@ def main() -> None:
 
         blocks: List[str] = []
         for book_id, chapter, verses in plan:
-    full_text = chapter_text(book_id, chapter)
+        full_text = chapter_text(book_id, chapter)
 
     if verses:
         lines = full_text.split("\n")

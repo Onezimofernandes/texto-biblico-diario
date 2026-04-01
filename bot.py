@@ -166,20 +166,41 @@ def expand_chapter_spec(spec: str) -> List[int]:
     return uniq
 
 
-def parse_reading(reading: str, name_to_id: Dict[str, str]) -> List[Tuple[str, List[int]]]:
+def parse_reading(reading: str, name_to_id: Dict[str, str]):
     parts = [p.strip() for p in reading.split(";") if p.strip()]
-    plan: List[Tuple[str, List[int]]] = []
+    plan = []
+
     for part in parts:
-        m = re.match(r"^(.+?)\s+([\d,\-\s]+)$", part)
+        # Agora aceita:
+        # Livro 19
+        # Livro 19:1-18
+        m = re.match(r"^(.+?)\s+(\d+)(?::([\d\-]+))?$", part)
+
         if not m:
             raise RuntimeError(f"Não consegui interpretar este trecho: '{part}'")
-        book_raw, ch_raw = m.group(1), m.group(2)
+
+        book_raw = m.group(1)
+        chapter = int(m.group(2))
+        verse_spec = m.group(3)
+
         key = norm(book_raw)
         if key not in name_to_id:
-            raise RuntimeError(f"Livro não reconhecido: '{book_raw}' (normalizado: '{key}')")
+            raise RuntimeError(f"Livro não reconhecido: '{book_raw}'")
+
         book_id = name_to_id[key]
-        chapters = expand_chapter_spec(ch_raw)
-        plan.append((book_id, chapters))
+
+        if verse_spec:
+            # ex: 1-18
+            if "-" in verse_spec:
+                start, end = map(int, verse_spec.split("-"))
+                verses = list(range(start, end + 1))
+            else:
+                verses = [int(verse_spec)]
+
+            plan.append((book_id, chapter, verses))
+        else:
+            plan.append((book_id, chapter, None))  # capítulo inteiro
+
     return plan
 
 
@@ -303,11 +324,27 @@ def main() -> None:
         plan = parse_reading(reading, name_to_id)
 
         blocks: List[str] = []
-        for book_id, chapters in plan:
-            for ch in chapters:
-                raw_text = chapter_text(book_id, ch)
-                clean_text = sanitize_text(raw_text)
-                blocks.append(clean_text)
+        for book_id, chapter, verses in plan:
+    full_text = chapter_text(book_id, chapter)
+
+    if verses:
+        lines = full_text.split("\n")
+        header = lines[0]
+        selected = []
+
+        for line in lines[1:]:
+            m = re.match(r"^(\d+)\.\s+(.*)", line)
+            if m:
+                vnum = int(m.group(1))
+                if vnum in verses:
+                    selected.append(line)
+
+        text = "\n".join([header] + selected)
+    else:
+        text = full_text
+
+    text = sanitize_text(text)
+    blocks.append(text)
 
         body_text = (
             f"Leitura Bíblica do Dia\n"

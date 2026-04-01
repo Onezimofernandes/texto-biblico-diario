@@ -385,22 +385,72 @@ def main():
             text = sanitize_text(text)
             blocks.append(text)
         
-        # Monta email
-        body_text = f"Leitura Bíblica do Dia\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
+        # 1. Preparação dos blocos (melhor separação sem poluir o HTML)
+content_html = "".join([f'<p style="margin-bottom: 1.5em;">{block}</p>' for block in blocks])
+
+body_html = f"""
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f9f9f9; -webkit-text-size-adjust: 100%;">
+    <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+                max-width: 650px; 
+                margin: 40px auto; 
+                padding: 40px; 
+                background-color: #ffffff; 
+                border-radius: 8px; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                color: #2c3e50;
+                line-height: 1.8;">
         
-        body_html = f"""
-        <html>
-        <head>
-            <meta charset="UTF-8">
-        </head>
-        <body style="font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2c3e50;">Leitura Bíblica do Dia</h2>
-            <p><strong>{date_str}</strong></p>
-            <p style="color: #7f8c8d;"><em>{reading}</em></p>
-            <hr style="border: none; border-top: 2px solid #ecf0f1; margin: 20px 0;">
-            <div style="white-space: pre-wrap; line-height: 1.6;">{body_text}</div>
-        </body>
-        </html>
+        <h2 style="color: #1a2a3a; 
+                   font-size: 28px; 
+                   margin-bottom: 8px; 
+                   font-weight: 700;
+                   letter-spacing: -0.5px;">
+            Leitura Bíblica Diária
+        </h2>
+        
+        <p style="color: #7f8c8d; 
+                  font-size: 16px; 
+                  margin-top: 0; 
+                  margin-bottom: 24px;
+                  text-transform: uppercase;
+                  letter-spacing: 1px;">
+            <strong>{date_str}</strong>
+        </p>
+        
+        <div style="background-color: #f8fbfd; 
+                    border-left: 4px solid #3498db; 
+                    padding: 15px 25px; 
+                    margin-bottom: 35px;
+                    font-style: italic;
+                    color: #34495e;
+                    font-size: 18px;">
+            {reading}
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <div style="font-size: 19px; 
+                    color: #333333; 
+                    text-align: justify; 
+                    hyphens: auto;">
+            {content_html}
+        </div>
+        
+        <footer style="margin-top: 50px; 
+                       text-align: center; 
+                       font-size: 12px; 
+                       color: #bdc3c7;">
+            Gerado automaticamente para sua meditação diária.
+        </footer>
+    </div>
+</body>
+</html>
+"""
         """
         
         # Envia email

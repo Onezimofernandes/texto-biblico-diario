@@ -78,19 +78,18 @@ def book_name_to_id_map() -> Dict[str, str]:
 # PARSER (capítulo + versículo)
 # =========================
 def parse_reading(reading: str, name_to_id: Dict[str, str]):
-    reading = reading.replace(",", ";")
     parts = [p.strip() for p in reading.split(";") if p.strip()]
     plan = []
 
     for part in parts:
-        m = re.match(r"^(.+?)\s+(\d+)(?::([\d\-]+))?$", part)
+        # Ex: "Salmo 11,59" ou "Salmo 11, 59"
+        m = re.match(r"^(.+?)\s+([\d,:-]+)$", part)
 
         if not m:
             raise RuntimeError(f"Não consegui interpretar: '{part}'")
 
         book_raw = m.group(1)
-        chapter = int(m.group(2))
-        verse_spec = m.group(3)
+        ref_raw = m.group(2)
 
         key = norm(book_raw)
         if key not in name_to_id:
@@ -98,16 +97,26 @@ def parse_reading(reading: str, name_to_id: Dict[str, str]):
 
         book_id = name_to_id[key]
 
-        if verse_spec:
-            if "-" in verse_spec:
-                start, end = map(int, verse_spec.split("-"))
-                verses = list(range(start, end + 1))
-            else:
-                verses = [int(verse_spec)]
-        else:
-            verses = None
+        # Divide múltiplos capítulos/versículos
+        refs = [r.strip() for r in ref_raw.split(",")]
 
-        plan.append((book_id, chapter, verses))
+        for ref in refs:
+            if ":" in ref:
+                # capítulo:versículo
+                ch, vs = ref.split(":")
+                ch = int(ch)
+
+                if "-" in vs:
+                    start, end = map(int, vs.split("-"))
+                    verses = list(range(start, end + 1))
+                else:
+                    verses = [int(vs)]
+
+                plan.append((book_id, ch, verses))
+
+            else:
+                # apenas capítulo
+                plan.append((book_id, int(ref), None))
 
     return plan
 

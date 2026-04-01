@@ -327,21 +327,21 @@ def main() -> None:
         for book_id, chapter, verses in plan:
             full_text = chapter_text(book_id, chapter)
 
-    if verses:
-        lines = full_text.split("\n")
-        header = lines[0]
-        selected = []
+            if verses:
+                lines = full_text.split("\n")
+                header = lines[0]
+                selected = []
 
-        for line in lines[1:]:
-            m = re.match(r"^(\d+)\.\s+(.*)", line)
-            if m:
-                vnum = int(m.group(1))
-                if vnum in verses:
-                    selected.append(line)
+                for line in lines[1:]:
+                    m = re.match(r"^(\d+)\.\s+(.*)", line)
+                    if m:
+                        vnum = int(m.group(1))
+                        if vnum in verses:
+                            selected.append(line)
 
-        text = "\n".join([header] + selected)
+            text = "\n".join([header] + selected)
     else:
-        text = full_text
+            text = full_text
 
     text = sanitize_text(text)
     blocks.append(text)

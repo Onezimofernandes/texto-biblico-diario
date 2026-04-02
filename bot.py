@@ -149,31 +149,51 @@ def book_name_to_id_map() -> Dict[str, str]:
 def parse_reading(reading: str, name_to_id: Dict[str, str]):
     """
     Parser robusto para diferentes formatos de leitura bíblica.
+    
+    Exemplos suportados:
+    - "Gênesis 1,2" → Gênesis capítulos 1 e 2
+    - "Gênesis 3-5" → Gênesis capítulos 3, 4 e 5
+    - "Salmo 11, 59" → Salmo capítulos 11 e 59
+    - "Levítico 20-22, Salmo 95" → Levítico caps 20-22, depois Salmo 95
+    - "Números 11-12:16, Salmo 90" → Números caps 11-12:16, depois Salmo 90
+    - "1Samuel 19:1-18; Salmo 11, 59" → múltiplas referências
+    - "Ester 4:10-17; 5-7" → Ester cap 4 vers 10-17, depois caps 5-7
+    - "2 João; 3 João" → livros sem números de capítulos
     """
+    # Primeiro, normaliza separadores: transforma vírgulas entre livros em ponto-e-vírgula
+    # Detecta padrões como ", Livro" e substitui por "; Livro"
     reading_normalized = re.sub(
         r',\s+([1-3]?\s*[A-ZÀÂÃÉÊÍÓÔÕÚ][a-zàâãéêíóôõúç]+)',
         r'; \1',
         reading
     )
     
+    # Separa por ponto-e-vírgula para múltiplas referências
     parts = [p.strip() for p in reading_normalized.split(";") if p.strip()]
     plan = []
+    
+    # Variável para manter o livro anterior (para casos como "Ester 4:10-17; 5-7")
     last_book_id = None
 
     for part in parts:
+        # Tenta match com livro + referências
         match = re.match(r'^([1-3]?\s*[A-Za-zÀ-ÿ\s]+?)\s+([\d,:;\-\s]+)$', part.strip())
         
+        # Caso especial: apenas nome do livro sem capítulos (ex: "2 João", "Judas")
         if not match:
+            # Tenta match apenas com nome do livro
             book_only_match = re.match(r'^([1-3]?\s*[A-Za-zÀ-ÿ\s]+)$', part.strip())
             if book_only_match:
                 book_raw = book_only_match.group(1).strip()
                 key = norm(book_raw)
                 if key in name_to_id:
                     book_id = name_to_id[key]
-                    plan.append((book_id, 1, None))
+                    plan.append((book_id, 1, None))  # Assume capítulo 1
                     last_book_id = book_id
                     continue
             
+            # Caso especial: apenas números (continuação do livro anterior)
+            # Ex: "Ester 4:10-17; 5-7" onde "5-7" refere-se a Ester
             number_only_match = re.match(r'^([\d,:\-\s]+)$', part.strip())
             if number_only_match and last_book_id:
                 refs_raw = number_only_match.group(1).strip()
@@ -184,6 +204,7 @@ def parse_reading(reading: str, name_to_id: Dict[str, str]):
             book_raw = match.group(1).strip()
             refs_raw = match.group(2).strip()
             
+            # Verifica se o livro existe
             key = norm(book_raw)
             if key not in name_to_id:
                 raise RuntimeError(f"Livro não reconhecido: '{book_raw}'")
@@ -191,28 +212,37 @@ def parse_reading(reading: str, name_to_id: Dict[str, str]):
             book_id = name_to_id[key]
             last_book_id = book_id
         
+        # Processa as referências (capítulos e versículos)
+        # Primeiro verifica se tem range com dois-pontos no meio (ex: "11-12:16")
+        # Esse é um caso especial: cap 11 completo, cap 12 até versículo 16
         if re.search(r'(\d+)-(\d+):(\d+)', refs_raw):
             match_special = re.search(r'(\d+)-(\d+):(\d+)', refs_raw)
             start_ch = int(match_special.group(1))
             end_ch = int(match_special.group(2))
             end_verse = int(match_special.group(3))
             
+            # Adiciona capítulos completos antes do último
             for ch in range(start_ch, end_ch):
                 plan.append((book_id, ch, None))
             
+            # Adiciona o último capítulo com versículos específicos
             verses = list(range(1, end_verse + 1))
             plan.append((book_id, end_ch, verses))
             
+            # Remove a parte já processada
             refs_raw = re.sub(r'\d+-\d+:\d+', '', refs_raw).strip().strip(',').strip()
         
+        # Separa por vírgula
         if refs_raw:
             refs = [r.strip() for r in refs_raw.split(",") if r.strip()]
             
             for ref in refs:
+                # Verifica se tem versículos específicos (tem dois-pontos)
                 if ":" in ref:
                     ch_part, vs_part = ref.split(":", 1)
                     ch = int(ch_part.strip())
                     
+                    # Verifica se é range de versículos
                     if "-" in vs_part:
                         start, end = vs_part.split("-", 1)
                         verses = list(range(int(start.strip()), int(end.strip()) + 1))
@@ -220,7 +250,10 @@ def parse_reading(reading: str, name_to_id: Dict[str, str]):
                         verses = [int(vs_part.strip())]
                     
                     plan.append((book_id, ch, verses))
+                
+                # Se não tem dois-pontos, são apenas capítulos
                 else:
+                    # Verifica se é range de capítulos
                     if "-" in ref:
                         start, end = ref.split("-", 1)
                         for ch in range(int(start.strip()), int(end.strip()) + 1):
@@ -247,6 +280,7 @@ def fetch_book(book_id: str):
     r.raise_for_status()
     data = r.json()
 
+    # Normaliza estrutura
     if isinstance(data, list):
         data = {"name": book_id, "chapters": data}
 
@@ -278,9 +312,11 @@ def chapter_text(book_id: str, chapter: int) -> str:
 # =========================
 def sanitize_text(text: str) -> str:
     """Remove artefatos e normaliza espaçamento do texto"""
+    # Remove strings problemáticas conhecidas
     text = text.replace("full-versionmente", "completamente")
     text = text.replace("full-version", "")
     
+    # Normaliza espaços
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"\s+([,.;:!?])", r"\1", text)
@@ -348,85 +384,58 @@ def main():
             
             text = sanitize_text(text)
             blocks.append(text)
-            
-        # --- INÍCIO DA GERAÇÃO DO EMAIL ---
         
-        # Gera a versão em texto puro (plain text) para clientes de email antigos
+        # Monta email em texto plano
         body_text = f"Leitura Bíblica do Dia\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
         
-        # Prepara os parágrafos do HTML convertendo as quebras de linha para <br>
-        # Isso garante que a formatação original (ex: números dos versículos em linhas separadas) seja mantida no HTML
-        html_paragraphs = []
+        # Formata blocos para HTML com tipografia melhorada
+        html_blocks = []
         for block in blocks:
-            formatted_block = block.replace('\n', '<br>')
-            html_paragraphs.append(f'<p style="margin-bottom: 1.5em;">{formatted_block}</p>')
-            
-        content_html = "".join(html_paragraphs)
-
+            lines = block.split('\n')
+            if lines:
+                # Primeira linha é o título do livro/capítulo
+                title = lines[0]
+                verses = lines[1:]
+                
+                html_block = f'<h2 style="font-family: Georgia, serif; font-size: 18px; font-weight: normal; color: #333; margin: 30px 0 20px 0; text-align: center;">{title}</h2>\n'
+                
+                # Versículos formatados
+                for verse in verses:
+                    if verse.strip():
+                        # Separa número do texto
+                        match = re.match(r'^(\d+)\.\s+(.+)$', verse)
+                        if match:
+                            num = match.group(1)
+                            text = match.group(2)
+                            html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;"><strong>{num}.</strong> {text}</p>\n'
+                        else:
+                            html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;">{verse}</p>\n'
+                
+                html_blocks.append(html_block)
+        
+        # Monta o HTML completo
         body_html = f"""
+        <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f9f9f9; -webkit-text-size-adjust: 100%;">
-            <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
-                        max-width: 650px; 
-                        margin: 40px auto; 
-                        padding: 40px; 
-                        background-color: #ffffff; 
-                        border-radius: 8px; 
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                        color: #2c3e50;
-                        line-height: 1.8;">
+        <body style="margin: 0; padding: 0; background-color: #fafafa;">
+            <div style="max-width: 700px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff;">
                 
-                <h2 style="color: #1a2a3a; 
-                           font-size: 22px; 
-                           margin-bottom: 8px; 
-                           font-weight: 700;
-                           letter-spacing: -0.5px;">
-                    Leitura Bíblica Diária
-                </h2>
+                {''.join(html_blocks)}
                 
-                <p style="color: #7f8c8d; 
-                          font-size: 14px; 
-                          margin-top: 0; 
-                          margin-bottom: 24px;
-                          text-transform: uppercase;
-                          letter-spacing: 1px;">
-                    <strong>{date_str}</strong>
-                </p>
-                
-                <div style="background-color: #f8fbfd; 
-                            border-left: 4px solid #3498db; 
-                            padding: 15px 25px; 
-                            margin-bottom: 35px;
-                            font-style: italic;
-                            color: #34495e;
-                            font-size: 18px;">
-                    {reading}
-                </div>
-
-                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-                <div style="font-size: 19px; 
-                            color: #333333; 
-                            text-align: justify; 
-                            hyphens: auto;">
-                    {content_html}
+                <div style="margin-top: 50px; padding-top: 30px; border-top: 1px solid #e0e0e0;">
+                    <p style="font-family: Georgia, serif; font-size: 14px; color: #999; text-align: center; line-height: 1.6; margin: 0;">
+                        Tenha um bom dia. Que Deus o abençoe maravilhosamente hoje e sempre.
+                    </p>
                 </div>
                 
-                <footer style="margin-top: 50px; 
-                               text-align: center; 
-                               font-size: 12px; 
-                               color: #bdc3c7;">
-                    Faça a sua leitura com atenção, sempre procurando uma aplicação prática para a sua vida.
-                </footer>
             </div>
         </body>
         </html>
         """
-        # --- FIM DA GERAÇÃO DO EMAIL ---
         
         # Envia email
         smtp_send(f"Leitura Bíblica ({date_str})", body_text, body_html)
@@ -443,14 +452,14 @@ def main():
         
         # Tenta enviar email de erro
         try:
-            # Em caso de erro, criamos versões simples para evitar que a própria formatação falhe
             smtp_send(
                 "ERRO - Leitura Bíblica Diária",
                 f"Erro ao processar leitura:\n\n{tb}",
-                f"<html><body><h2>Erro na Automação</h2><pre style='background: #f8d7da; padding: 15px; border-radius: 5px;'>{tb}</pre></body></html>"
+                f"<pre style='background: #f8d7da; padding: 15px; border-radius: 5px;'>{tb}</pre>"
             )
-        except Exception as email_err:
-            print(f"Falha ao enviar email de erro: {email_err}")
+        except:
+            print("Falha ao enviar email de erro")
+
 
 if __name__ == "__main__":
     main()

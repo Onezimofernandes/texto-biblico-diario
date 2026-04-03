@@ -45,8 +45,11 @@ def smtp_send(subject: str, body_text: str, body_html: str) -> None:
 def load_today_reading() -> Tuple[str, str]:
     """
     Carrega a leitura do dia de hoje a partir do CSV.
-    Se a data atual não existir no plano, calcula o dia do ciclo e retorna a leitura correspondente.
-    Isso permite que o plano de 365 dias se repita indefinidamente.
+    
+    Usa uma lógica baseada no dia do ano (1-365) para lidar corretamente com anos bissextos:
+    - Em anos bissextos, 29/02 usa a mesma leitura de 28/02
+    - A partir de 01/03, volta ao alinhamento normal
+    - Isso garante que o plano sempre se repita corretamente, independente de anos bissextos
     """
     today = dt.date.today().isoformat()
     
@@ -59,32 +62,40 @@ def load_today_reading() -> Tuple[str, str]:
         if (row.get("date") or "").strip() == today:
             return today, (row.get("reading") or "").strip()
     
-    # Se não encontrou por data exata, calcula o dia do ciclo
-    # Pega a primeira data do plano como referência
+    # Se não encontrou por data exata, usa o dia do ano
     if not rows:
         raise RuntimeError("CSV vazio ou sem dados")
     
-    first_date_str = rows[0].get("date", "").strip()
-    if not first_date_str:
-        raise RuntimeError("Primeira linha do CSV sem data válida")
-    
     try:
-        first_date = dt.datetime.strptime(first_date_str, "%Y-%m-%d").date()
         today_date = dt.date.today()
         
-        # Calcula quantos dias se passaram desde o início do plano
-        days_diff = (today_date - first_date).days
+        # Pega o dia do ano (1-366)
+        day_of_year = today_date.timetuple().tm_yday
         
-        # Calcula o índice no ciclo (0 a len(rows)-1)
-        cycle_index = days_diff % len(rows)
+        # Em anos bissextos, após 29/02 (dia 60), ajusta para alinhar com ano comum
+        # 29/02 em ano bissexto usa a mesma leitura de 28/02
+        # A partir de 01/03, volta ao alinhamento normal
+        if today_date.year % 4 == 0 and (today_date.year % 100 != 0 or today_date.year % 400 == 0):
+            # É ano bissexto
+            if day_of_year == 60:  # 29 de fevereiro
+                # Usa a mesma leitura de 28/02
+                cycle_index = 58  # Dia 59 (índice 58) = 28/02
+                print(f"Ano bissexto: 29/02 usando leitura de 28/02 (dia {cycle_index + 1})")
+            elif day_of_year > 60:  # Após 29/02
+                # Subtrai 1 para alinhar com plano de 365 dias
+                cycle_index = day_of_year - 2
+            else:  # Antes de 29/02
+                cycle_index = day_of_year - 1
+        else:
+            # Ano comum (365 dias)
+            cycle_index = day_of_year - 1
         
-        # Se o índice for negativo (data antes do início do plano), ajusta
-        if cycle_index < 0:
-            cycle_index = len(rows) + cycle_index
+        # Garante que o índice está dentro do range
+        cycle_index = cycle_index % len(rows)
         
         reading = (rows[cycle_index].get("reading") or "").strip()
         
-        print(f"Data não encontrada no CSV. Usando ciclo: dia {cycle_index + 1} de {len(rows)}")
+        print(f"Data não encontrada no CSV. Usando dia do ano: {day_of_year} → dia {cycle_index + 1} do plano")
         
         return today, reading
         
@@ -476,7 +487,7 @@ def main():
                 <!-- Cabeçalho -->
                 <div style="text-align: center; padding-bottom: 30px; border-bottom: 1px solid #e0e0e0; margin-bottom: 30px;">
                     <h1 style="font-family: Georgia, serif; font-size: 28px; font-weight: normal; color: #1a1a1a; margin: 0 0 10px 0;">
-                        Leitura Bíblica Diária
+                        Leitura Bíblica do Dia
                     </h1>
                     <p style="font-family: Georgia, serif; font-size: 14px; color: #666; margin: 0;">
                         {data_formatada} • Versão: <strong>NVI</strong>
@@ -492,7 +503,7 @@ def main():
                         {reading}
                     </h3>
                     <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.6; color: #555; margin: 0;">
-                        Bom dia. Aqui está a sua porção bíblica de hoje. Leia-a com calma, tentando sempre aplicar à sua vida.
+                        Bom dia. Aqui está a sua porção bíblica de hoje. Leia com calma, tentando sempre aplicar à sua vida.
                     </p>
                 </div>
                 

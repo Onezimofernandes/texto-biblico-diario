@@ -43,14 +43,53 @@ def smtp_send(subject: str, body_text: str, body_html: str) -> None:
 # LEITURA DO CSV
 # =========================
 def load_today_reading() -> Tuple[str, str]:
-    """Carrega a leitura do dia de hoje a partir do CSV"""
+    """
+    Carrega a leitura do dia de hoje a partir do CSV.
+    Se a data atual não existir no plano, calcula o dia do ciclo e retorna a leitura correspondente.
+    Isso permite que o plano de 365 dias se repita indefinidamente.
+    """
     today = dt.date.today().isoformat()
+    
     with open(PLAN_CSV, encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            if (row.get("date") or "").strip() == today:
-                return today, (row.get("reading") or "").strip()
-    raise RuntimeError(f"Nenhuma leitura encontrada para {today}")
+        rows = list(reader)
+    
+    # Primeiro tenta encontrar por data exata
+    for row in rows:
+        if (row.get("date") or "").strip() == today:
+            return today, (row.get("reading") or "").strip()
+    
+    # Se não encontrou por data exata, calcula o dia do ciclo
+    # Pega a primeira data do plano como referência
+    if not rows:
+        raise RuntimeError("CSV vazio ou sem dados")
+    
+    first_date_str = rows[0].get("date", "").strip()
+    if not first_date_str:
+        raise RuntimeError("Primeira linha do CSV sem data válida")
+    
+    try:
+        first_date = dt.datetime.strptime(first_date_str, "%Y-%m-%d").date()
+        today_date = dt.date.today()
+        
+        # Calcula quantos dias se passaram desde o início do plano
+        days_diff = (today_date - first_date).days
+        
+        # Calcula o índice no ciclo (0 a len(rows)-1)
+        cycle_index = days_diff % len(rows)
+        
+        # Se o índice for negativo (data antes do início do plano), ajusta
+        if cycle_index < 0:
+            cycle_index = len(rows) + cycle_index
+        
+        reading = (rows[cycle_index].get("reading") or "").strip()
+        
+        print(f"Data não encontrada no CSV. Usando ciclo: dia {cycle_index + 1} de {len(rows)}")
+        
+        return today, reading
+        
+    except Exception as e:
+        raise RuntimeError(f"Erro ao calcular dia do ciclo: {e}")
 
 
 # =========================
@@ -386,7 +425,7 @@ def main():
             blocks.append(text)
         
         # Monta email em texto plano
-        body_text = f"Leitura Bíblica Diária\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
+        body_text = f"Leitura Bíblica do Dia\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
         
         # Formata a data em formato legível (ex: 28 de março de 2026)
         try:
@@ -437,7 +476,7 @@ def main():
                 <!-- Cabeçalho -->
                 <div style="text-align: center; padding-bottom: 30px; border-bottom: 1px solid #e0e0e0; margin-bottom: 30px;">
                     <h1 style="font-family: Georgia, serif; font-size: 28px; font-weight: normal; color: #1a1a1a; margin: 0 0 10px 0;">
-                        Leitura Bíblica do Dia
+                        Leitura Bíblica Diária
                     </h1>
                     <p style="font-family: Georgia, serif; font-size: 14px; color: #666; margin: 0;">
                         {data_formatada} • Versão: <strong>NVI</strong>

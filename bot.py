@@ -386,7 +386,17 @@ def main():
             blocks.append(text)
         
         # Monta email em texto plano
-        body_text = f"Leitura Bíblica do Dia\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
+        body_text = f"Leitura Bíblica Diária\n{date_str}\n{reading}\n\n" + "\n\n".join(blocks)
+        
+        # Formata a data em formato legível (ex: 28 de março de 2026)
+        try:
+            from datetime import datetime
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", 
+                    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+            data_formatada = f"{date_obj.day} de {meses[date_obj.month - 1]} de {date_obj.year}"
+        except:
+            data_formatada = date_str
         
         # Formata blocos para HTML com tipografia melhorada
         html_blocks = []
@@ -413,7 +423,7 @@ def main():
                 
                 html_blocks.append(html_block)
         
-        # Monta o HTML completo
+        # Monta o HTML completo com cabeçalho
         body_html = f"""
         <!DOCTYPE html>
         <html>
@@ -424,8 +434,33 @@ def main():
         <body style="margin: 0; padding: 0; background-color: #fafafa;">
             <div style="max-width: 700px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff;">
                 
+                <!-- Cabeçalho -->
+                <div style="text-align: center; padding-bottom: 30px; border-bottom: 1px solid #e0e0e0; margin-bottom: 30px;">
+                    <h1 style="font-family: Georgia, serif; font-size: 28px; font-weight: normal; color: #1a1a1a; margin: 0 0 10px 0;">
+                        Leitura Bíblica do Dia
+                    </h1>
+                    <p style="font-family: Georgia, serif; font-size: 14px; color: #666; margin: 0;">
+                        {data_formatada} • Versão: <strong>NVI</strong>
+                    </p>
+                </div>
+                
+                <!-- Introdução -->
+                <div style="background-color: #f9f9f9; border-left: 4px solid #d4af37; padding: 20px 25px; margin-bottom: 30px; border-radius: 4px;">
+                    <p style="font-family: Georgia, serif; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0; font-weight: 600;">
+                        LEITURA DE HOJE
+                    </p>
+                    <h3 style="font-family: Georgia, serif; font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 12px 0;">
+                        {reading}
+                    </h3>
+                    <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.6; color: #555; margin: 0;">
+                        Bom dia. Aqui está a sua porção bíblica de hoje. Leia-a com calma, tentando sempre aplicar à sua vida.
+                    </p>
+                </div>
+                
+                <!-- Conteúdo Bíblico -->
                 {''.join(html_blocks)}
                 
+                <!-- Rodapé -->
                 <div style="margin-top: 50px; padding-top: 30px; border-top: 1px solid #e0e0e0;">
                     <p style="font-family: Georgia, serif; font-size: 14px; color: #999; text-align: center; line-height: 1.6; margin: 0;">
                         Tenha um bom dia. Que Deus o abençoe maravilhosamente hoje e sempre.

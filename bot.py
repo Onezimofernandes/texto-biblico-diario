@@ -14,6 +14,11 @@ BIBLE_LANG = os.environ.get("BIBLE_LANG", "pt-br")
 BIBLE_VERSION = os.environ.get("BIBLE_VERSION", "nvi")
 SENT_MARKER_FILE = os.environ.get("SENT_MARKER_FILE", "sent.txt")
 
+# Configuração para versão alemã (bilíngue)
+ENABLE_GERMAN = os.environ.get("ENABLE_GERMAN", "true").lower() == "true"
+GERMAN_LANG = "de"
+GERMAN_VERSION = "schlachter"
+
 RAW_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions"
 
 
@@ -319,13 +324,21 @@ def parse_reading(reading: str, name_to_id: Dict[str, str]):
 # =========================
 _cache = {}
 
-def fetch_book(book_id: str):
-    """Faz cache e busca do livro da Bíblia via API do GitHub"""
-    key = f"{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}"
+def fetch_book(book_id: str, lang: str = None, version: str = None):
+    """
+    Faz cache e busca do livro da Bíblia via API do GitHub.
+    Se lang e version não forem especificados, usa as configurações padrão.
+    """
+    if lang is None:
+        lang = BIBLE_LANG
+    if version is None:
+        version = BIBLE_VERSION
+    
+    key = f"{lang}/{version}/{book_id}"
     if key in _cache:
         return _cache[key]
 
-    url = f"{RAW_BASE}/{BIBLE_LANG}/{BIBLE_VERSION}/{book_id}/{book_id}.json"
+    url = f"{RAW_BASE}/{lang}/{version}/{book_id}/{book_id}.json"
     r = requests.get(url, timeout=10)
     r.raise_for_status()
     data = r.json()
@@ -338,9 +351,12 @@ def fetch_book(book_id: str):
     return data
 
 
-def chapter_text(book_id: str, chapter: int) -> str:
-    """Retorna o texto formatado de um capítulo completo"""
-    data = fetch_book(book_id)
+def chapter_text(book_id: str, chapter: int, lang: str = None, version: str = None) -> str:
+    """
+    Retorna o texto formatado de um capítulo completo.
+    Se lang e version não forem especificados, usa as configurações padrão.
+    """
+    data = fetch_book(book_id, lang, version)
     chapters = data.get("chapters", [])
     
     if chapter > len(chapters):
@@ -355,6 +371,24 @@ def chapter_text(book_id: str, chapter: int) -> str:
             lines.append(f"{i}. {v.strip()}")
     
     return "\n".join(lines)
+
+
+def get_verse_text(book_id: str, chapter: int, verse_num: int, lang: str = None, version: str = None) -> str:
+    """
+    Retorna o texto de um versículo específico.
+    """
+    data = fetch_book(book_id, lang, version)
+    chapters = data.get("chapters", [])
+    
+    if chapter > len(chapters):
+        return ""
+    
+    ch = chapters[chapter - 1]
+    
+    if verse_num > len(ch):
+        return ""
+    
+    return ch[verse_num - 1].strip() if ch[verse_num - 1] else ""
 
 
 # =========================
@@ -413,24 +447,74 @@ def main():
         
         # Processa cada referência bíblica
         for book_id, chapter, verses in plan:
-            full_text = chapter_text(book_id, chapter)
+            # Busca texto em português
+            data_pt = fetch_book(book_id, BIBLE_LANG, BIBLE_VERSION)
+            chapters_pt = data_pt.get("chapters", [])
             
-            # Se tem versículos específicos, filtra
-            if verses:
-                lines = full_text.split("\n")
-                header = lines[0]
-                selected = []
-                
-                for line in lines[1:]:
-                    m = re.match(r"^(\d+)\.\s+(.*)", line)
-                    if m:
-                        vnum = int(m.group(1))
-                        if vnum in verses:
-                            selected.append(line)
-                
-                text = "\n".join([header] + selected)
+            if chapter > len(chapters_pt):
+                continue
+            
+            ch_pt = chapters_pt[chapter - 1]
+            book_name_pt = data_pt.get('name', book_id)
+            
+            # Busca texto em alemão (se habilitado)
+            if ENABLE_GERMAN:
+                try:
+                    data_de = fetch_book(book_id, GERMAN_LANG, GERMAN_VERSION)
+                    chapters_de = data_de.get("chapters", [])
+                    ch_de = chapters_de[chapter - 1] if chapter <= len(chapters_de) else []
+                    book_name_de = data_de.get('name', book_id)
+                except:
+                    # Se falhar ao buscar alemão, desabilita para este trecho
+                    ch_de = []
+                    book_name_de = book_id
             else:
-                text = full_text
+                ch_de = []
+                book_name_de = book_id
+            
+            # Monta o texto bilíngue
+            if verses:
+                # Com versículos específicos
+                if ENABLE_GERMAN and ch_de:
+                    # Título bilíngue
+                    header = f"{book_name_de} {chapter} / {book_name_pt} {chapter}"
+                else:
+                    header = f"{book_name_pt} {chapter}"
+                
+                selected = [header]
+                
+                for vnum in verses:
+                    if vnum <= len(ch_pt):
+                        verse_pt = ch_pt[vnum - 1].strip()
+                        
+                        if ENABLE_GERMAN and ch_de and vnum <= len(ch_de):
+                            verse_de = ch_de[vnum - 1].strip()
+                            # Formato: número. [DE] texto alemão [PT] texto português
+                            selected.append(f"{vnum}. 🇩🇪 {verse_de}")
+                            selected.append(f"   🇧🇷 {verse_pt}")
+                        else:
+                            selected.append(f"{vnum}. {verse_pt}")
+                
+                text = "\n".join(selected)
+            else:
+                # Capítulo completo
+                if ENABLE_GERMAN and ch_de:
+                    header = f"{book_name_de} {chapter} / {book_name_pt} {chapter}"
+                else:
+                    header = f"{book_name_pt} {chapter}"
+                
+                lines = [header]
+                
+                for i, verse_pt in enumerate(ch_pt, start=1):
+                    if verse_pt.strip():
+                        if ENABLE_GERMAN and ch_de and i <= len(ch_de):
+                            verse_de = ch_de[i - 1].strip()
+                            lines.append(f"{i}. 🇩🇪 {verse_de}")
+                            lines.append(f"   🇧🇷 {verse_pt.strip()}")
+                        else:
+                            lines.append(f"{i}. {verse_pt.strip()}")
+                
+                text = "\n".join(lines)
             
             text = sanitize_text(text)
             blocks.append(text)
@@ -459,17 +543,59 @@ def main():
                 
                 html_block = f'<h2 style="font-family: Georgia, serif; font-size: 18px; font-weight: normal; color: #333; margin: 30px 0 20px 0; text-align: center;">{title}</h2>\n'
                 
-                # Versículos formatados
-                for verse in verses:
-                    if verse.strip():
-                        # Separa número do texto
-                        match = re.match(r'^(\d+)\.\s+(.+)$', verse)
-                        if match:
-                            num = match.group(1)
-                            text = match.group(2)
-                            html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;"><strong>{num}.</strong> {text}</p>\n'
-                        else:
-                            html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;">{verse}</p>\n'
+                # Versículos formatados (bilíngue ou monolíngue)
+                i = 0
+                while i < len(verses):
+                    verse = verses[i].strip()
+                    if not verse:
+                        i += 1
+                        continue
+                    
+                    # Verifica se é versículo alemão (🇩🇪)
+                    if "🇩🇪" in verse:
+                        # Extrai número e texto alemão
+                        match_de = re.match(r'^(\d+)\.\s*🇩🇪\s+(.+)$', verse)
+                        if match_de and i + 1 < len(verses):
+                            num = match_de.group(1)
+                            text_de = match_de.group(2)
+                            
+                            # Próxima linha deve ser português
+                            next_verse = verses[i + 1].strip()
+                            match_pt = re.match(r'^\s*🇧🇷\s+(.+)$', next_verse)
+                            
+                            if match_pt:
+                                text_pt = match_pt.group(1)
+                                
+                                # Formata versículo bilíngue
+                                html_block += f'''
+<div style="margin: 16px 0; padding: 12px; background-color: #f9f9f9; border-left: 3px solid #d4af37; border-radius: 4px;">
+    <p style="font-family: Georgia, serif; font-size: 14px; color: #1a5490; margin: 0 0 8px 0; font-weight: 600;">
+        <strong>{num}.</strong> 🇩🇪 Deutsch
+    </p>
+    <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.7; color: #333; margin: 0 0 12px 0; text-align: justify; font-style: italic;">
+        {text_de}
+    </p>
+    <p style="font-family: Georgia, serif; font-size: 14px; color: #0d7d3f; margin: 0 0 4px 0; font-weight: 600;">
+        🇧🇷 Português
+    </p>
+    <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.7; color: #333; margin: 0; text-align: justify;">
+        {text_pt}
+    </p>
+</div>
+'''
+                                i += 2  # Pula as duas linhas processadas
+                                continue
+                    
+                    # Versículo normal (só português)
+                    match = re.match(r'^(\d+)\.\s+(.+)$', verse)
+                    if match:
+                        num = match.group(1)
+                        text = match.group(2)
+                        html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;"><strong>{num}.</strong> {text}</p>\n'
+                    else:
+                        html_block += f'<p style="font-family: Georgia, serif; font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0; text-align: justify;">{verse}</p>\n'
+                    
+                    i += 1
                 
                 html_blocks.append(html_block)
         

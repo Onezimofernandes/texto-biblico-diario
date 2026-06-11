@@ -672,3 +672,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def debug_books():
+    import requests
+
+    url = "https://api.github.com/repos/maatheusgois/bible/contents/versions/pt-br/nvi"
+
+    r = requests.get(url)
+    r.raise_for_status()
+
+    for item in r.json():
+        print(item["name"])
+
+
+if __name__ == "__main__":
+    debug_books()

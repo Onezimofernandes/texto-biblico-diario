@@ -152,7 +152,7 @@ def book_name_to_id_map():
         "lamentacoes": "lm",
         "ezequiel": "ez",
         "daniel": "dn",
-        "oseias": "hos",
+        "oseias": "ho",
         "joel": "jl",
         "amos": "am",
         "obadias": "ob",
